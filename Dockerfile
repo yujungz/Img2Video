@@ -5,7 +5,7 @@
 FROM node:20-alpine AS frontend-builder
 WORKDIR /frontend
 COPY frontend/package*.json ./
-RUN npm install
+RUN npm install && npm install @rollup/rollup-linux-x64-musl
 COPY frontend/ ./
 RUN npm run build
 
@@ -13,7 +13,7 @@ RUN npm run build
 FROM node:20-alpine AS admin-builder
 WORKDIR /admin
 COPY admin/package*.json ./
-RUN npm install
+RUN npm install && npm install @rollup/rollup-linux-x64-musl
 COPY admin/ ./
 RUN npm run build
 
