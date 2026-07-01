@@ -191,6 +191,86 @@ docker-compose down -v       # 停止并清除数据卷（谨慎）
 
 ---
 
+## 故障排查（远程服务器）
+
+以下命令在远程服务器上执行，用于诊断常见问题。
+
+### 容器状态
+
+```bash
+# 查看所有容器运行状态
+docker ps --filter name=img2video --format "table {{.Names}}\t{{.Status}}"
+
+# 查看 app 容器完整日志
+docker logs img2video-app --tail 50
+```
+
+### Nginx 诊断
+
+```bash
+# 检查 nginx 配置是否加载（含上传大小限制）
+docker exec img2video-app sh -c "grep client_max /etc/nginx/sites-enabled/app"
+
+# 检查 nginx 配置语法
+docker exec img2video-app sh -c "nginx -t"
+
+# 查看 nginx 启动/运行错误
+docker exec img2video-app sh -c "cat /var/log/supervisor/nginx.err.log"
+```
+
+### 后端诊断
+
+```bash
+# 查看后端运行日志
+docker exec img2video-app sh -c "cat /var/log/supervisor/backend.out.log"
+
+# 查看后端错误日志
+docker exec img2video-app sh -c "cat /var/log/supervisor/backend.err.log"
+
+# 查看 Celery 任务队列日志
+docker exec img2video-app sh -c "cat /var/log/supervisor/celery.err.log"
+```
+
+### 网络连通性
+
+```bash
+# 测试 app 到 postgres 的连接
+docker exec img2video-app sh -c "python -c 'import socket; s=socket.create_connection((\"postgres\",5432),timeout=5); s.close(); print(\"postgres OK\")'"
+
+# 测试 app 到 redis 的连接
+docker exec img2video-app sh -c "python -c 'import socket; s=socket.create_connection((\"redis\",6379),timeout=5); s.close(); print(\"redis OK\")'"
+```
+
+### 上传测试（用 curl 模拟）
+
+```bash
+# 先获取登录 token
+TOKEN=$(curl -s http://localhost:8103/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}' | python -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+# 测试上传（直接调后端，绕过 nginx，用于判断问题是否在 nginx）
+curl -v -X POST http://localhost:8102/api/images/upload \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@test.png"
+
+# 测试上传（通过 nginx 路径路由）
+curl -v -X POST http://localhost:8103/api/images/upload \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@test.png"
+```
+
+### 常见问题与解决
+
+| 问题 | 现象 | 排查 | 解决 |
+|------|------|------|------|
+| 图片上传失败 | 弹窗"上传失败"，浏览器控制台 413 | `grep client_max /etc/nginx/sites-enabled/app` | docker-compose.yml 中未更新镜像时需 `docker-compose up -d --build` |
+| Nginx 无法启动 | 页面无法访问，容器不断重启 | `cat /var/log/supervisor/nginx.err.log` | 检查是否有 `getpwnam("nginx")` 错误，需重建镜像 |
+| 后端无法连接数据库 | 页面加载卡住，API 返回 500 | `docker logs img2video-app` 查看 SQLAlchemy 错误 | 检查 postgres 容器是否 healthy，网络是否正常 |
+| 前端白屏/404 | 访问 /front 显示空白或 404 | `curl -s -o /dev/null -w "%{http_code}" http://localhost:8103/front/` | 检查构建时 `base: '/front'` 是否正确配置，重建前端 |
+
+---
+
 ## 开发模式
 
 ### 后端
