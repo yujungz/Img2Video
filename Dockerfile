@@ -31,6 +31,10 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Create nginx user (python:3.11-slim doesn't create it automatically)
+RUN groupadd -r nginx || true && \
+    useradd -r -g nginx -s /sbin/nologin -d /var/cache/nginx nginx || true
+
 # Install Python dependencies
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
