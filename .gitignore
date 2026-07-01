@@ -1,0 +1,51 @@
+# ============================
+#  Sensitive files - NEVER COMMIT
+# ============================
+.env
+*.key
+*.pem
+*.cert
+
+# ============================
+#  Python
+# ============================
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+
+# ============================
+#  Node / Frontend
+# ============================
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+.vite/
+
+# ============================
+#  IDE & OS
+# ============================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ============================
+#  Docker
+# ============================
+.dockerignore
+
+# ============================
+#  Project specific
+# ============================
+*.log

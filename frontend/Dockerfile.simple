@@ -1,0 +1,14 @@
+# Simple Dockerfile using existing nginx base
+FROM nginx:alpine
+
+# Copy nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Copy built files - we'll build locally and copy
+COPY dist /usr/share/nginx/html
+
+# Expose port
+EXPOSE 8101
+
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]

@@ -1,0 +1,109 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: img2video-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: img2video
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - img2video-network
+
+  # Redis Cache & Message Queue
+  redis:
+    image: redis:7-alpine
+    container_name: img2video-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - img2video-network
+
+  # MinIO Object Storage
+  minio:
+    image: minio/minio:latest
+    container_name: img2video-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    ports:
+      - "8101:9001"  # MinIO Console (HTTP) - External
+    # Port 9000 (S3 API) stays internal for app service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - img2video-network
+
+  # Img2Video All-in-One Application
+  # Builds frontend, admin, and backend into a single image with Nginx path routing.
+  # All services (front, admin, api) accessed via port 8103 with path routing.
+  #   http://host:8103/front  - User frontend
+  #   http://host:8103/admin  - Admin panel
+  #   http://host:8103/api    - Backend API
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: img2video-app
+    ports:
+      - "8103:8103"  # Application HTTP (path routing: /front, /admin, /api)
+    env_file:
+      - .env
+    environment:
+      # Internal service URLs (docker-compose DNS, safe defaults)
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/img2video
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+
+      # Public-facing URLs (override via .env in production)
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:8103}
+      - MINIO_PUBLIC_ENDPOINT=${MINIO_PUBLIC_ENDPOINT:-localhost:8101}
+
+      # Wait for dependent services before starting
+      - WAIT_FOR=postgres:5432 redis:6379 minio:9000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - img2video-network
+    restart: unless-stopped
+
+networks:
+  img2video-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
