@@ -9,8 +9,7 @@ services:
       POSTGRES_DB: img2video
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "127.0.0.1:5432:5432"
+    # Port 5432 is internal only - no host port mapping
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -26,8 +25,7 @@ services:
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
-    ports:
-      - "6379:6379"
+    # Port 6379 is internal only - no host port mapping
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
